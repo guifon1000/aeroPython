@@ -227,7 +227,7 @@ def flowOverCylinder(R,N_panels):
                loc='best', prop={'size':16})
     plt.xlim(-1.1, 1.1)
     plt.ylim(-1.1, 1.1);
-
+    plt.show()
 
 
 def integral_normal(p_i, p_j):
