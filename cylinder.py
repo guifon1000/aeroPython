@@ -190,16 +190,30 @@ def particuleVelocity(part,x,y):
         return [p.influence(x,y)[0],p.influence(x,y)[1]]
 
 
-def flowOverCylinder(R,N_panels):
-# defines the cylinder        
-    u_inf=1.0                                           # radius
-    theta = np.linspace(0, 2*math.pi, 100)                           # angles in radians
-    x_cylinder, y_cylinder = R*np.cos(theta), R*np.sin(theta)           
-# defining the end-points of the panels
-    x_ends = R*np.cos(np.linspace(0, 2*math.pi, N_panels+1))
-    y_ends = R*np.sin(np.linspace(0, 2*math.pi, N_panels+1))
+def profile(name):
+    alp = 0.4
+    f = open(name,'r').readlines()
+    plt.clf()
+    x_ends=[]
+    y_ends=[]
+    for l in f[1:]:
+        xloc = float(l.split()[0])
+        yloc = float(l.split()[1])
 
-# defining the panels
+        x_ends.append(xloc*(np.cos(alp))+yloc*np.sin(alp))
+        y_ends.append(-xloc*(np.sin(alp))+yloc*np.cos(alp))
+    teex = [x_ends[0],y_ends[0]]
+    tein = [x_ends[-1],y_ends[-1]]
+    teed=[0.5*(teex[0]+tein[0]),0.5*(teex[1]+tein[1])]
+    leed = [x_ends[(len(x_ends)-1)/2],y_ends[(len(x_ends)-1)/2]]
+    plt.plot(x_ends,y_ends)
+    plt.axis('equal')
+    plt.show()
+    u_inf=1.0  
+
+    N_panels=len(x_ends)-1
+    # radius
+    # defining the end-points of the panel# defining the panels
     panels = np.empty(N_panels, dtype=object)
     for i in xrange(N_panels):
         panels[i] = Panel(x_ends[i], y_ends[i], x_ends[i+1], y_ends[i+1])
@@ -212,9 +226,18 @@ def flowOverCylinder(R,N_panels):
         for j, p_j in enumerate(panels):
             if i != j:
                 A[i,j] = 0.5/math.pi*integral_normal(p_i, p_j)
+    
+
+    # looking for the trailing edge vortex intensity
+    gamma0 = (2*np.pi*u_inf)/(alp*np.cos(alp))
+
+
+
 
     # computes the RHS of the linear system
-    b = - u_inf * np.cos([p.beta for p in panels])
+    for p in panels :
+        print 'need to code !!! rhs with trailing edge vortex'
+    # PREVIOUS :: b = - u_inf * np.cos([p.beta for p in panels])
 
     # solves the linear system
     sigma = np.linalg.solve(A, b )#the matrix of the linear system
@@ -229,6 +252,11 @@ def flowOverCylinder(R,N_panels):
     # computes the RHS of the linear system
     b = - u_inf * np.sin([panel.beta for panel in panels])
 
+
+
+
+
+
     # computes the tangential velocity at each panel center-point
     vt = np.dot(A, sigma) + b
 
@@ -239,24 +267,7 @@ def flowOverCylinder(R,N_panels):
     for i, panel in enumerate(panels):
         panel.sigma = sigma[i]# plotting the panels
     plt.grid(True)
-    plt.xlabel('x', fontsize=16)
-    plt.ylabel('y', fontsize=16)
-    plt.plot(x_cylinder, y_cylinder, color='b', linestyle='-', linewidth=1)
-    plt.plot(x_ends, y_ends, color='#CD2305', linestyle='-', linewidth=2)
-    plt.scatter([p.xa for p in panels], [p.ya for p in panels], color='#CD2305', s=40)
-    plt.scatter([p.xc for p in panels], [p.yc for p in panels], color='k', s=40, zorder=3)
-    for p in panels :
-        plt.quiver(p.xc,p.yc,p.xc+np.cos(p.beta),p.yc+np.sin(p.beta))
-    
-    
     Vinf=freeStream(1.0,0.)
-    
-    plt.legend(['cylinder', 'panels', 'end-points', 'center-points'], 
-               loc='best', prop={'size':16})
-    plt.xlim(-1.1, 1.1)
-    plt.ylim(-1.1, 1.1);
-    plt.show()
-
     
 
     A = build_matrix(panels)                    # computes the singularity matrix
@@ -268,12 +279,12 @@ def flowOverCylinder(R,N_panels):
     for i, panel in enumerate(panels):
         panel.sigma = sigma[i]
     # defines a mesh grid
-    Nx, Ny = 50, 50                  # number of points in the x and y directions
-    val_x, val_y = 1.0, 2.0
-    #x_min, x_max = min( panel.xa for panel in panels ), max( panel.xa for panel in panels )
-    #y_min, y_max = min( panel.ya for panel in panels ), max( panel.ya for panel in panels )
-    #x_start, x_end = x_min-val_x*(x_max-x_min), x_max+val_x*(x_max-x_min)
-    #y_start, y_end = y_min-val_y*(y_max-y_min), y_max+val_y*(y_max-y_min)
+    Nx, Ny = 10, 10              # number of points in the x and y directions
+    val_x, val_y = 0.,0.
+    x_min, x_max = min( panel.xa for panel in panels ), max( panel.xa for panel in panels )
+    y_min, y_max = min( panel.ya for panel in panels ), max( panel.ya for panel in panels )
+    x_start, x_end = x_min-val_x*(x_max-x_min), x_max+val_x*(x_max-x_min)
+    y_start, y_end = y_min-val_y*(y_max-y_min), y_max+val_y*(y_max-y_min)
 
     X, Y = np.meshgrid(np.linspace(x_start, x_end, Nx), np.linspace(y_start, y_end, Ny))
 
@@ -292,9 +303,9 @@ def flowOverCylinder(R,N_panels):
             Up = particuleVelocity(part,p.x,p.y)
             p.x+=(Up[0]+Vinf.u_inf)*dt
             p.y+=(Up[1]+Vinf.v_inf)*dt
-        particule  = Particule(x=facR*R*np.cos(teta),y=facR*R*np.sin(teta),omega = 10.*teta,t=it*dt)
+        R=1.0
+        particule  = Particule(x=teed[0],y=teed[1],omega = 10.*teta,t=it*dt)
         part.append(particule)
-        #for p in part:
         plt.clf()
         size=10
         A_source = source_contribution_normal(panels)
@@ -302,18 +313,17 @@ def flowOverCylinder(R,N_panels):
         plt.figure(figsize=(size, (y_end-y_start)/(x_end-x_start)*size))
         print it
         teta = (np.pi/4)*np.cos(f*float(it)*dt)
-        plt.plot([0.,facR*R*np.cos(teta)],[0.,facR*R*np.sin(teta)]) 
         plt.xlabel('x', fontsize=16)
         plt.ylabel('y', fontsize=16)
         for p in part:
             plt.scatter(p.x,p.y)
-        #plt.streamplot(X, Y, u, v, density=5, linewidth=1, arrowsize=1, arrowstyle='->')
-        plt.plot(x_cylinder, y_cylinder, color='b', linestyle='-', linewidth=1)
+        plt.streamplot(X, Y, u, v, density=2, linewidth=1, arrowsize=1, arrowstyle='->')
+        plt.plot(x_ends, y_ends, color='b', linestyle='-', linewidth=1)
         #plt.fill([panel.xc for panel in panels], 
          #[panel.yc for panel in panels], 
          #color='k', linestyle='solid', linewidth=2, zorder=2)
-        plt.xlim(-2., 13.)
-        plt.ylim(-7.5, 7.5)
+        plt.xlim(1.5*x_start, 1.5*x_end)
+        plt.ylim(1.5*y_start,1.5*y_end)
         #plt.ylim(y_start, y_end)
         plt.savefig('img_'+str(it)+'.png')
         plt.clf()
@@ -571,45 +581,4 @@ def build_rhs(panels, freestream):
 
 
 
-
-
-N = 100                                # number of points in each direction
-x_start, x_end = -2.0, 2.0            # boundaries in the x-direction
-y_start, y_end = -2.0, 2.0            # boundaries in the y-direction
-x = np.linspace(x_start, x_end, N)    # creates a 1D-array with the x-coordinates
-y = np.linspace(y_start, y_end, N)    # creates a 1D-array with the y-coordinates
-Vinf=freeStream(1.0,0.)
-
-
-
-X, Y = np.meshgrid(x, y)              # generates a mesh grid
-
-R= 0.5
-N_panels = 20
-theta = np.linspace(0, 2*math.pi, 100)                           # angles in radians
-x_cylinder, y_cylinder = R*np.cos(theta), R*np.sin(theta)   # coordinates of the cylinder
-u,v=Vinf.u_inf,Vinf.v_inf
-panels = flowOverCylinder(R,N_panels)
-for panel in panels:
-    panel.cp = 1.0 - (panel.vt/Vinf.u_inf)**2
-# calculates the analytical surface pressure coefficient
-cp_analytical = 1.0 - 4*(y_cylinder/R)**2
-
-# plots the surface pressure coefficient
-plt.figure(figsize=(10, 6))
-plt.grid(True)
-plt.xlabel('x', fontsize=16)
-plt.ylabel('$C_p$', fontsize=16)
-plt.plot(x_cylinder, cp_analytical, color='b', linestyle='-', linewidth=1, zorder=1)
-plt.scatter([p.xc for p in panels], [p.cp for p in panels], color='#CD2305', s=40, zorder=2)
-plt.title('Number of panels : %d' % N_panels, fontsize=16)
-plt.legend(['analytical', 'source panel method'], loc='best', prop={'size':16})
-plt.xlim(-1.0, 1.0)
-plt.ylim(-4.0, 2.0);
-
-
-plt.show()
-
-
-
-
+profile('NACAcamber0012.dat')
