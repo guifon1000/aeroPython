@@ -191,7 +191,7 @@ def particuleVelocity(part,x,y):
 
 
 def profile(name):
-    alp = 0.4
+    alp = 0.
     f = open(name,'r').readlines()
     plt.clf()
     x_ends=[]
@@ -208,7 +208,8 @@ def profile(name):
     leed = [x_ends[(len(x_ends)-1)/2],y_ends[(len(x_ends)-1)/2]]
     plt.plot(x_ends,y_ends)
     plt.axis('equal')
-    plt.show()
+    #plt.show()
+    plt.clf()
     u_inf=1.0  
 
     N_panels=len(x_ends)-1
@@ -218,60 +219,19 @@ def profile(name):
     for i in xrange(N_panels):
         panels[i] = Panel(x_ends[i], y_ends[i], x_ends[i+1], y_ends[i+1])
    
-    # computes the source influence matrix
-    A = np.empty((N_panels, N_panels), dtype=float)
-    np.fill_diagonal(A, 0.5)
-
-    for i, p_i in enumerate(panels):
-        for j, p_j in enumerate(panels):
-            if i != j:
-                A[i,j] = 0.5/math.pi*integral_normal(p_i, p_j)
-    
 
     # looking for the trailing edge vortex intensity
-    gamma0 = (2*np.pi*u_inf)/(alp*np.cos(alp))
+    gamma0 = -1
 
 
 
-
-    # computes the RHS of the linear system
-    for p in panels :
-        print 'need to code !!! rhs with trailing edge vortex'
-    # PREVIOUS :: b = - u_inf * np.cos([p.beta for p in panels])
-
-    # solves the linear system
-    sigma = np.linalg.solve(A, b )#the matrix of the linear system
-    A = np.empty((N_panels, N_panels), dtype=float)
-    np.fill_diagonal(A, 0.0)
-
-    for i, p_i in enumerate(panels):
-        for j, p_j in enumerate(panels):
-            if i != j:
-                A[i,j] = 0.5/math.pi*integral_tangential(p_i, p_j)
-
-    # computes the RHS of the linear system
-    b = - u_inf * np.sin([panel.beta for panel in panels])
-
-
-
-
-
-
-    # computes the tangential velocity at each panel center-point
-    vt = np.dot(A, sigma) + b
-
-    for i, panel in enumerate(panels):
-        panel.vt = vt[i]
-        # computes the tangential velocity at each panel center-point
-    vt = np.dot(A, sigma) + b
-    for i, panel in enumerate(panels):
-        panel.sigma = sigma[i]# plotting the panels
     plt.grid(True)
     Vinf=freeStream(1.0,0.)
-    
+    tab = []
+    tab.append(vortex(gamma0,teed[0],teed[1]))
 
-    A = build_matrix(panels)                    # computes the singularity matrix
-    b = build_rhs(panels, Vinf)           # computes the freestream RHS
+    A = build_matrix(panels)            # computes the singularity matrix
+    b = build_rhs(panels, Vinf) # computes the freestream RHS
 
     # solves the linear system
     sigma = np.linalg.solve(A, b)
@@ -285,6 +245,8 @@ def profile(name):
     y_min, y_max = min( panel.ya for panel in panels ), max( panel.ya for panel in panels )
     x_start, x_end = x_min-val_x*(x_max-x_min), x_max+val_x*(x_max-x_min)
     y_start, y_end = y_min-val_y*(y_max-y_min), y_max+val_y*(y_max-y_min)
+    x_start, x_end = -0.5,1.5
+    y_start, y_end = -1.,1.
 
     X, Y = np.meshgrid(np.linspace(x_start, x_end, Nx), np.linspace(y_start, y_end, Ny))
 
@@ -298,18 +260,18 @@ def profile(name):
     facR = 1.1
     part = [] 
     dpart = [] 
-    for it in range(500):
+    for it in range(1):
         for p in part:
             Up = particuleVelocity(part,p.x,p.y)
             p.x+=(Up[0]+Vinf.u_inf)*dt
             p.y+=(Up[1]+Vinf.v_inf)*dt
+        vte = vortex(gamma0,teed[0],teed[1])
+        uvort=vte.get_velocity(X,Y)
         R=1.0
         particule  = Particule(x=teed[0],y=teed[1],omega = 10.*teta,t=it*dt)
         part.append(particule)
         plt.clf()
         size=10
-        A_source = source_contribution_normal(panels)
-        B_vortex = vortex_contribution_normal(panels)
         plt.figure(figsize=(size, (y_end-y_start)/(x_end-x_start)*size))
         print it
         teta = (np.pi/4)*np.cos(f*float(it)*dt)
@@ -317,7 +279,7 @@ def profile(name):
         plt.ylabel('y', fontsize=16)
         for p in part:
             plt.scatter(p.x,p.y)
-        plt.streamplot(X, Y, u, v, density=2, linewidth=1, arrowsize=1, arrowstyle='->')
+        plt.streamplot(X, Y, uvort[0]+u, uvort[1]+v, density=5, linewidth=1, arrowsize=1, arrowstyle='->')
         plt.plot(x_ends, y_ends, color='b', linestyle='-', linewidth=1)
         #plt.fill([panel.xc for panel in panels], 
          #[panel.yc for panel in panels], 
@@ -560,7 +522,7 @@ def build_matrix(panels):
 
 
 
-def build_rhs(panels, freestream):
+def build_rhs(panels, freestream , tab=None,alp=0.):
     """Builds the RHS of the linear system.
     
     Arguments
@@ -576,7 +538,16 @@ def build_rhs(panels, freestream):
     
     for i, panel in enumerate(panels):
         b[i] = -freestream.u_inf * math.cos(freestream.alpha - panel.beta)
-    
+    if tab != None:
+        b = np.empty(len(panels), dtype=float)
+        for i, panel in enumerate(panels):
+            u=[0.,0.]
+            for t in tab:
+                uadd = t.get_velocity(panel.xc,panel.yc)
+                u[0]=uadd[0]
+                u[1]=uadd[1]
+            unorm = np.sqrt(u[0]**2.+u[1]**2.)
+            b[i] = (unorm -freestream.u_inf)* math.cos(alp - panel.beta)
     return b
 
 
