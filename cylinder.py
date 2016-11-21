@@ -107,7 +107,7 @@ class Panel:
         self.sigma = 0.                             # source strength
         self.vt = 0.                                # tangential velocity
         self.cp = 0.                                # pressure coefficient
-
+        self.gamma = 0.
     #def potential(self,x,y):
          
 
@@ -190,27 +190,139 @@ def particuleVelocity(part,x,y):
         return [p.influence(x,y)[0],p.influence(x,y)[1]]
 
 
+
+
+
+
+
+
+def cylinder0():
+    alp = 0.0
+    x_ends=[]
+    y_ends=[]
+    for l in np.linspace(0,2*np.pi,num=20):
+        xloc = 0.5*np.cos(l)
+        yloc = 0.5*np.sin(l)
+
+        x_ends.append(xloc*(np.cos(alp))+yloc*np.sin(alp))
+        y_ends.append(-xloc*(np.sin(alp))+yloc*np.cos(alp))
+    
+    num=3
+    N_panels=2*num
+    dt=0.8
+    for it in range(100):
+        print it 
+        t=np.cos(float(it*dt))
+        sup=np.linspace(t,np.pi,endpoint=False,num=num)
+        inf=np.linspace(np.pi,2.*np.pi+t,endpoint=False,num=num)
+        x_ends=[0.5*np.cos(l) for l in sup]+[0.5*np.cos(l) for l in inf]
+        y_ends=[0.5*np.sin(l) for l in sup]+[0.5*np.sin(l) for l in inf]
+        N_panels=len(x_ends)-1
+        panels = np.empty(N_panels, dtype=object)
+        for i in xrange(N_panels):
+            panels[i] = Panel(x_ends[i], y_ends[i], x_ends[i+1], y_ends[i+1])
+
+        teex = [x_ends[0],y_ends[0]]
+        tein = [x_ends[-1],y_ends[-1]]
+        teed=[0.5*(teex[0]+tein[0]),0.5*(teex[1]+tein[1])]
+        leed = [x_ends[(len(x_ends)-1)/2],y_ends[(len(x_ends)-1)/2]]
+
+        Vinf=freeStream(1.0,5.)
+        A_source = source_contribution_normal(panels)
+        B_vortex = vortex_contribution_normal(panels)
+
+        
+
+        A = build_singularity_matrix(A_source, B_vortex)
+        b = build_freestream_rhs(panels, Vinf)
+
+
+        # solve for singularity strengths
+        strengths = np.linalg.solve(A, b)
+
+        # store source strength on each panel
+        for i , panel in enumerate(panels):
+            panel.sigma = strengths[i]
+    
+        # store circulation density
+        gamma = strengths[-1]
+        for p in panels :
+            p.gamma = gamma
+
+        Nx, Ny = 10, 10      # number of points in the x and y directions
+        val_x, val_y = 0.,0.
+        x_min, x_max = min( panel.xa for panel in panels ), max( panel.xa for panel in panels )
+        y_min, y_max = min( panel.ya for panel in panels ), max( panel.ya for panel in panels )
+        x_start, x_end = x_min-val_x*(x_max-x_min), x_max+val_x*(x_max-x_min)
+        y_start, y_end = y_min-val_y*(y_max-y_min), y_max+val_y*(y_max-y_min)
+        x_start, x_end = -2.0,2.0
+        y_start, y_end = -2.0,2.0
+
+        X, Y = np.meshgrid(np.linspace(x_start, x_end, Nx), np.linspace(y_start, y_end, Ny))
+
+
+
+        u, v = get_velocity_field(panels, Vinf, X, Y)
+        plt.clf()
+        size=10
+        plt.streamplot(X, Y, u,v, density=2, linewidth=1, arrowsize=1, arrowstyle='->')
+        plt.plot(x_ends, y_ends, 'rs', linewidth=1)
+        plt.xlim(x_start, x_end)
+        plt.ylim(y_start,y_end)
+        plt.axis('equal')
+        #plt.ylim(y_start, y_end)
+        plt.savefig('img_'+str(it)+'.png')
+        #plt.show()
+        
+
+        # compute lift
+        cl = ( gamma*sum(panel.length for panel in panels)
+            / (0.5*Vinf.u_inf*(x_max-x_min)) )
+        print('lift coefficient: CL = {:0.3f}'.format(cl))
+
+
+        plt.clf()
+
+
+
 def profile(name):
-    alp = 0.
+    alp = 0.04
     f = open(name,'r').readlines()
     plt.clf()
     x_ends=[]
     y_ends=[]
-    for l in f[1:]:
+    xl0 = 0.5*(float(f[1].split()[0])+float(f[-1].split()[0]))
+    yl0 = 0.5*(float(f[1].split()[1])+float(f[-1].split()[1]))
+    x_ends.append(xl0*(np.cos(alp))+yl0*np.sin(alp))
+    y_ends.append(-xl0*(np.sin(alp))+yl0*np.cos(alp))
+    for l in f[2:-1]:
         xloc = float(l.split()[0])
         yloc = float(l.split()[1])
 
         x_ends.append(xloc*(np.cos(alp))+yloc*np.sin(alp))
         y_ends.append(-xloc*(np.sin(alp))+yloc*np.cos(alp))
+
+
+    x_ends.append(xl0*(np.cos(alp))+yl0*np.sin(alp))
+    y_ends.append(-xl0*(np.sin(alp))+yl0*np.cos(alp))
+
+
+    x_ends=[]
+    y_ends=[]
+    for l in np.linspace(0,2*np.pi,num=20):
+        xloc = 0.5*np.cos(l)
+        yloc = 0.5*np.sin(l)
+
+        x_ends.append(xloc*(np.cos(alp))+yloc*np.sin(alp))
+        y_ends.append(-xloc*(np.sin(alp))+yloc*np.cos(alp))
+
+
+
+
     teex = [x_ends[0],y_ends[0]]
     tein = [x_ends[-1],y_ends[-1]]
     teed=[0.5*(teex[0]+tein[0]),0.5*(teex[1]+tein[1])]
     leed = [x_ends[(len(x_ends)-1)/2],y_ends[(len(x_ends)-1)/2]]
-    plt.plot(x_ends,y_ends)
-    plt.axis('equal')
-    #plt.show()
-    plt.clf()
-    u_inf=1.0  
 
     N_panels=len(x_ends)-1
     # radius
@@ -221,12 +333,12 @@ def profile(name):
    
 
     # looking for the trailing edge vortex intensity
-    gamma0 = -1
+    gamma0 = 0.
 
 
 
     plt.grid(True)
-    Vinf=freeStream(1.0,0.)
+    Vinf=freeStream(1.0,5.)
     tab = []
     tab.append(vortex(gamma0,teed[0],teed[1]))
 
@@ -239,14 +351,14 @@ def profile(name):
     for i, panel in enumerate(panels):
         panel.sigma = sigma[i]
     # defines a mesh grid
-    Nx, Ny = 10, 10              # number of points in the x and y directions
+    Nx, Ny = 20, 20      # number of points in the x and y directions
     val_x, val_y = 0.,0.
     x_min, x_max = min( panel.xa for panel in panels ), max( panel.xa for panel in panels )
     y_min, y_max = min( panel.ya for panel in panels ), max( panel.ya for panel in panels )
     x_start, x_end = x_min-val_x*(x_max-x_min), x_max+val_x*(x_max-x_min)
     y_start, y_end = y_min-val_y*(y_max-y_min), y_max+val_y*(y_max-y_min)
-    x_start, x_end = -0.5,1.5
-    y_start, y_end = -1.,1.
+    x_start, x_end = -2.0,2.0
+    y_start, y_end = -2.0,2.0
 
     X, Y = np.meshgrid(np.linspace(x_start, x_end, Nx), np.linspace(y_start, y_end, Ny))
 
@@ -272,22 +384,23 @@ def profile(name):
         part.append(particule)
         plt.clf()
         size=10
-        plt.figure(figsize=(size, (y_end-y_start)/(x_end-x_start)*size))
         print it
         teta = (np.pi/4)*np.cos(f*float(it)*dt)
         plt.xlabel('x', fontsize=16)
         plt.ylabel('y', fontsize=16)
         for p in part:
             plt.scatter(p.x,p.y)
-        plt.streamplot(X, Y, uvort[0]+u, uvort[1]+v, density=5, linewidth=1, arrowsize=1, arrowstyle='->')
-        plt.plot(x_ends, y_ends, color='b', linestyle='-', linewidth=1)
+        plt.streamplot(X, Y, u,v, density=5, linewidth=1, arrowsize=1, arrowstyle='->')
+        plt.plot(x_ends, y_ends, color='r', linestyle='-', linewidth=1)
         #plt.fill([panel.xc for panel in panels], 
          #[panel.yc for panel in panels], 
          #color='k', linestyle='solid', linewidth=2, zorder=2)
-        plt.xlim(1.5*x_start, 1.5*x_end)
-        plt.ylim(1.5*y_start,1.5*y_end)
+        plt.xlim(x_start, x_end)
+        plt.ylim(y_start,y_end)
+        plt.axis('equal')
         #plt.ylim(y_start, y_end)
         plt.savefig('img_'+str(it)+'.png')
+        plt.show()
         plt.clf()
     return panels
 
@@ -309,7 +422,7 @@ def kutta_condition(A_source, B_vortex):
     b: Numpy 1d array (float)
         The left hand-side of the Kutta-condition equation.
     """
-    b = numpy.empty(A_source.shape[0]+1, dtype=float)
+    b = np.empty(A_source.shape[0]+1, dtype=float)
     # matrix of source contribution on tangential velocity
     # is the same than
     # matrix of vortex contribution on normal velocity
@@ -317,7 +430,7 @@ def kutta_condition(A_source, B_vortex):
     # matrix of vortex contribution on tangential velocity
     # is the opposite of
     # matrix of source contribution on normal velocity
-    b[-1] = - numpy.sum(A_source[0, :] + A_source[-1, :])
+    b[-1] = - np.sum(A_source[0, :] + A_source[-1, :])
     return b
 
 def build_singularity_matrix(A_source, B_vortex):
@@ -336,11 +449,11 @@ def build_singularity_matrix(A_source, B_vortex):
     A:  Numpy 2d array (float)
         Matrix of the linear system.
     """
-    A = numpy.empty((A_source.shape[0]+1, A_source.shape[1]+1), dtype=float)
+    A = np.empty((A_source.shape[0]+1, A_source.shape[1]+1), dtype=float)
     # source contribution matrix
     A[:-1, :-1] = A_source
     # vortex contribution array
-    A[:-1, -1] = numpy.sum(B_vortex, axis=1)
+    A[:-1, -1] = np.sum(B_vortex, axis=1)
     # Kutta condition array
     A[-1, :] = kutta_condition(A_source, B_vortex)
     return A
@@ -418,15 +531,21 @@ def get_velocity_field(panels, freestream, X, Y):
     """
     Nx, Ny = X.shape
     u, v = np.empty((Nx, Ny), dtype=float), np.empty((Nx, Ny), dtype=float)
-    
+ 
     for i in range(Nx):
         for j in range(Ny):
             u[i,j] = freestream.u_inf*math.cos(freestream.alpha)\
-                     + 0.5/math.pi*sum([p.sigma*integral(X[i,j], Y[i,j], p, 1, 0) for p in panels])
+                     + 0.5/math.pi*sum([p.sigma*integral(X[i,j], Y[i,j], p, 1, 0) for p in panels])\
+                     - 0.5/math.pi*sum([p.gamma*integral(X[i,j], Y[i,j], p, 1, 0) for p in panels])
             v[i,j] = freestream.u_inf*math.sin(freestream.alpha)\
-                     + 0.5/math.pi*sum([p.sigma*integral(X[i,j], Y[i,j], p, 0, 1) for p in panels])
-    
-    return u, v
+                     + 0.5/math.pi*sum([p.sigma*integral(X[i,j], Y[i,j], p, 0, 1) for p in panels])\
+                     - 0.5/math.pi*sum([p.gamma*integral(X[i,j], Y[i,j], p, 0, 1) for p in panels])
+            for p in panels:
+                vor = vortex(p.gamma,p.xc,p.yc)
+                velvor = vor.get_velocity(X[i,j],Y[i,j])
+                #u[i,j]=u[i,j]-velvor[0]
+                #v[i,j]=v[i,j]-velvor[1]
+        return u, v
      
 
 def integral_normal(p_i, p_j):
@@ -550,6 +669,29 @@ def build_rhs(panels, freestream , tab=None,alp=0.):
             b[i] = (unorm -freestream.u_inf)* math.cos(alp - panel.beta)
     return b
 
+def build_freestream_rhs(panels, freestream):
+    """Builds the right hand-side of the system 
+    arising from the freestream contribution.
+    
+    Parameters
+    ----------
+    panels: Numpy 1d array (Panel object)
+        List of panels.
+    freestream: Freestream object
+        Freestream conditions.
+    
+    Returns
+    -------
+    b: Numpy 1d array (float)
+        Freestream contribution on each panel and on the Kutta condition.
+    """
+    b = np.empty(panels.size+1,dtype=float)
+    # freestream contribution on each panel
+    for i, panel in enumerate(panels):
+        b[i] = -freestream.u_inf * np.cos(freestream.alpha - panel.beta)
+    # freestream contribution on the Kutta condition
+    b[-1] = -freestream.u_inf*( np.sin(freestream.alpha-panels[0].beta)
+                               +np.sin(freestream.alpha-panels[-1].beta) )
+    return b
 
-
-profile('NACAcamber0012.dat')
+cylinder0()
